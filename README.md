@@ -7,9 +7,9 @@ for RBC data repositories.
 Each of the RBC repos has a set of branches that include data for
 scans that pass a set of criteria. The branches are:
 
- * `complete-ok`: Structural and BOLD data have passed QC
+ * `complete-pass`: Structural and BOLD data have passed QC
  * `complete-artifact`: Structural data can be "Pass" or "Artifact", BOLD is "Pass"
- * `warning-all`: Contains all the potential data - you'll have to explain why you chose this in any resulting work.
+ * `warning-fail`: Contains all the potential data - you'll have to explain why you chose this in any resulting work.
 
 ## Making a release branch
 
