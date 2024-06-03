@@ -13,6 +13,7 @@ do
     git clone git@github.com:ReproBrainChart/${study}_CPAC.git
 
     python \
+        -m pdb \
         ${SCRIPT} \
         ${study} \
         ${WORK_DIR}/${study}_FreeSurfer \

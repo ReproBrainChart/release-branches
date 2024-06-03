@@ -10,6 +10,7 @@ import os
 import subprocess
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
@@ -86,6 +87,20 @@ def safe_run(cmd):
         raise Exception("\n\nError running:\n\n" + cmdtxt)
 
 
+def safe_delete_batch(files_to_delete, batch_size=5000):
+    """Sometimes the list of files is too long for git. So this
+    function will split them into batches of 1mil"""
+    if not files_to_delete:
+        logging.info("No files to git rm.")
+        return
+
+    n_chunks = len(files_to_delete) // batch_size + 1
+    chunks = np.array_split(files_to_delete, n_chunks)
+    logging.info(f"git rm-ing {len(files_to_delete)} files in {n_chunks} batches")
+    for chunk in chunks:
+        safe_run(["git", "rm", "-rf"] + chunk.tolist())
+
+
 def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=None):
     """
 
@@ -111,14 +126,22 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
     doing_bold = bold_fail is not None
 
     def get_dir_to_delete(participant_id, session_id):
-        inner_dir = "freesurfer" if not doing_bold else "cpac_RBCv0"
+        if not doing_bold:
+            inner_dir = "freesurfer"
+        else:
+            inner_dir = "cpac_RBCv0"
+
         participant_dir = (
             f"sub-{participant_id}" if "-" not in participant_id else participant_id
         )
+
         if study_name in NO_SES_STUDIES:
             base_dir = data_dir / inner_dir / participant_dir
         else:
-            base_dir = data_dir / inner_dir / participant_dir / f"ses-{session_id}"
+            if not doing_bold:
+                base_dir = data_dir / inner_dir / f"{participant_dir}_ses-{session_id}"
+            else:
+                base_dir = data_dir / inner_dir / participant_dir / f"ses-{session_id}"
 
         if not base_dir.exists():
             logging.warning(f"missing {base_dir}")
@@ -144,52 +167,72 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         if row.task is not None:
             search += f"task-{row.task}*"
             search_zpad += f"task-{row.task}*"
-        if row.run is not None:
+        if not (np.isnan(row.run) or row.run is None):
             search += f"run-{row.run}*"
             search_zpad += f"run-{row.run:02}*"
         bold_files_to_delete = list(base_dir.rglob(search)) + list(
             base_dir.rglob(search_zpad)
         )
-        safe_run(["git", "rm"] + list(map(str, bold_files_to_delete)))
+        if not bold_files_to_delete:
+            logging.warning(f"No files found for {row}")
+        return list(map(str, bold_files_to_delete))
 
     def commit_and_push(branchname, msg, do_commit=False):
         tagname = f"release-{branchname}"
         if do_commit:
             safe_run(["git", "commit", "-m", f"'{msg}'"])
-        safe_run(["git", "tag", tagname])
-        safe_run(["git", "push", "origin", branchname])
-        safe_run(["git", "push", "origin", tagname])
+        # XXX UNCOMMENT
+        # safe_run(["git", "tag", tagname])
+        # safe_run(["git", "push", "origin", branchname])
+        # safe_run(["git", "push", "origin", tagname])
 
     safe_run(["git", "checkout", "-b", warning_branch])
     commit_and_push(warning_branch, "update warning branch", do_commit=False)
 
     # Update the complete-artifact branch
     safe_run(["git", "checkout", "-b", artifact_branch])
-    n_changed = 0
+    fail_dirs_to_delete = []
     for _, row in tqdm(t1_fail.iterrows(), total=t1_fail.shape[0]):
         base_dir = get_dir_to_delete(row.participant_id, row.session_id)
         if base_dir is not None:
-            safe_run(["git", "rm", "-rf", str(base_dir)])
-            n_changed += 1
+            fail_dirs_to_delete.append(str(base_dir))
+
+    logging.info(f"Deleting {len(fail_dirs_to_delete)} T1w-fail dirs")
+    safe_delete_batch(fail_dirs_to_delete)
 
     # Delete any BOLD files if requested
     if doing_bold:
+        bold_files_to_delete = []
         for _, row in tqdm(bold_fail.iterrows(), total=bold_fail.shape[0]):
-            delete_bold_files(row)
-            n_changed += 1
+            relevant_bold_files = delete_bold_files(row)
+            if relevant_bold_files:
+                bold_files_to_delete.extend(relevant_bold_files)
+                safe_delete_batch(relevant_bold_files)
 
-    commit_and_push(artifact_branch, "remove qc-fail sessions", do_commit=n_changed > 0)
+        logging.info(f"Deleting {len(bold_files_to_delete)} BOLD-related files")
+
+    fail_plus_bold_to_del = fail_dirs_to_delete + bold_files_to_delete
+    commit_and_push(
+        artifact_branch,
+        "remove qc-fail sessions",
+        do_commit=len(fail_plus_bold_to_del) > 0,
+    )
 
     # Update the complete-pass branch
     safe_run(["git", "checkout", "-b", pass_branch])
-    n_changed = 0
+    artifact_dirs_to_delete = []
     for _, row in tqdm(t1_artifact.iterrows(), total=t1_artifact.shape[0]):
         base_dir = get_dir_to_delete(row.participant_id, row.session_id)
         if base_dir is not None:
-            safe_run(["git", "rm", "-rf", str(base_dir)])
-            n_changed += 1
+            artifact_dirs_to_delete.append(str(base_dir))
+    logging.info(f"Deleting {len(artifact_dirs_to_delete)} T1w-artifact dirs")
+    safe_delete_batch(artifact_dirs_to_delete)
 
-    commit_and_push(pass_branch, "remove qc-artifact sessions", do_commit=n_changed > 0)
+    commit_and_push(
+        pass_branch,
+        "remove qc-artifact sessions",
+        do_commit=len(artifact_dirs_to_delete) > 0,
+    )
 
 
 def get_parser():
@@ -222,7 +265,7 @@ if __name__ == "__main__":
     )
 
     # create branches in the anatomical derivatives
-    clean_dataset(args.study_name, args.tag, args.freesurfer_dir, t1_artifact, t1_fail)
+    # clean_dataset(args.study_name, args.tag, args.freesurfer_dir, t1_artifact, t1_fail)
 
     # create branches in the bold derivatives
     clean_dataset(
