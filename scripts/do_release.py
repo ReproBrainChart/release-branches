@@ -132,7 +132,7 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
             inner_dir = "cpac_RBCv0"
 
         participant_dir = (
-            f"sub-{participant_id}" if "-" not in participant_id else participant_id
+            f"sub-{participant_id}" if "-" not in str(participant_id) else participant_id
         )
 
         if study_name in NO_SES_STUDIES:
@@ -153,7 +153,7 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         so only glob if the directory exists."""
         participant_bids = (
             f"sub-{row.participant_id}"
-            if "-" not in row.participant_id
+            if "-" not in str(row.participant_id)
             else row.participant_id
         )
         session_bids = f"ses-{row.session_id}"
@@ -201,8 +201,8 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
     safe_delete_batch(fail_dirs_to_delete)
 
     # Delete any BOLD files if requested
+    bold_files_to_delete = []
     if doing_bold:
-        bold_files_to_delete = []
         for _, row in tqdm(bold_fail.iterrows(), total=bold_fail.shape[0]):
             relevant_bold_files = delete_bold_files(row)
             if relevant_bold_files:
@@ -265,9 +265,9 @@ if __name__ == "__main__":
     )
 
     # create branches in the anatomical derivatives
-    # clean_dataset(args.study_name, args.tag, args.freesurfer_dir, t1_artifact, t1_fail)
+    clean_dataset(args.study_name, args.tag, args.freesurfer_dir, t1_artifact, t1_fail)
 
     # create branches in the bold derivatives
-    clean_dataset(
-        args.study_name, args.tag, args.bold_dir, t1_artifact, t1_fail, bold_fail
-    )
+    # clean_dataset(
+    #     args.study_name, args.tag, args.bold_dir, t1_artifact, t1_fail, bold_fail
+    # )

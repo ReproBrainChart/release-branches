@@ -1,7 +1,7 @@
 #!/bin/bash
 RELEASE=0.0.1
 STUDIES="CCNP PNC NKI BHRC HBN"
-WORK_DIR="/home/matt/projects/RBC/data/tmp"
+WORK_DIR="/cbica/comp_space/RBC/release"
 SCRIPT="$PWD/do_release.py"
 
 mkdir -p ${WORK_DIR}
