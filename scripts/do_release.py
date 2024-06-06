@@ -69,7 +69,7 @@ def get_things_to_delete(study_name, fs_dir, bold_dir):
 
     # Get a list of bold failures
     bold_fail = bold_qc_df[bold_qc_df["fmriExclude"] > 0][
-        ["participant_id", "session_id", "task", "run"]
+        ["participant_id", "session_id", "task", "run", "acq"]
     ]
 
     return t1_artifact, t1_fail, bold_fail
@@ -162,11 +162,15 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         if not base_dir.exists():
             return
 
+        # sub-<label>[_ses-<label>]_task-<label>[_acq-<label>][_ce-<label>][_rec-<label>][_dir-<label>][_run-<index>][_echo-<index>][_part-<mag|phase|real|imag>][_chunk-<index>]_bold.
         search = "*"
         search_zpad = "*"
         if row.task is not None:
             search += f"task-{row.task}*"
             search_zpad += f"task-{row.task}*"
+        if not (np.isnan(row.acq) or row.acq is None):
+            search += f"acq-{row.acq}*"
+            search_zpad += f"acq-{row.acq}*"
         if not (np.isnan(row.run) or row.run is None):
             search += f"run-{row.run}*"
             search_zpad += f"run-{row.run:02}*"
@@ -268,6 +272,6 @@ if __name__ == "__main__":
     clean_dataset(args.study_name, args.tag, args.freesurfer_dir, t1_artifact, t1_fail)
 
     # create branches in the bold derivatives
-    # clean_dataset(
-    #     args.study_name, args.tag, args.bold_dir, t1_artifact, t1_fail, bold_fail
-    # )
+    clean_dataset(
+        args.study_name, args.tag, args.bold_dir, t1_artifact, t1_fail, bold_fail
+    )
