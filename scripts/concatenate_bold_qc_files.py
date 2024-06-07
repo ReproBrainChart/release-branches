@@ -15,7 +15,7 @@ import pandas as pd
 from tqdm import tqdm
 
 NO_SES_STUDIES = {
-    "CCNP": 1,
+    "CCNP": "1",
     "PNC": "PNC1",
 }
 

@@ -19,6 +19,40 @@ NO_SES_STUDIES = {
     "PNC": "PNC1",
 }
 
+QC_DTYPES = {
+    "acq": str,
+    "participant_id": str,
+    "run": str,
+    "session_id": str,
+    "task": str,
+}
+
+
+def read_qc_tsv(tsv_file):
+    """Reads and sanity-checks a QC tsv.
+    
+    We are explicitly NOT converting empty values to "",
+    they will still be NaNs.
+    """
+    df = pd.read_csv(tsv_file, sep="\t", dtype=QC_DTYPES, keep_default_na=True)
+    
+    # Check mandatory fields
+    if df["participant_id"].str.startswith("sub-").any():
+        raise Exception("Found 'sub-' in the participant_id column")
+    if df["session_id"].str.startswith("ses-").any():
+        raise Exception("Found 'ses-' in the session_id column")
+
+    # Check optional fields
+    if "acq" in df.columns and df["acq"].str.startswith("acq-").any():
+        raise Exception("Found 'acq-' in the acq column")
+    if "run" in df.columns and df["run"].str.startswith("run-").any():
+        raise Exception("Found 'run-' in the run column")
+    if "task" in df.columns and df["task"].str.startswith("task-").any():
+        raise Exception("Found 'task-' in the task column")
+
+    logging.info(f"Successfully read {tsv_file}")
+    return df
+
 
 def get_things_to_delete(study_name, fs_dir, bold_dir):
     """Create dataframes that specify which modalities fail QC thresholds
@@ -50,13 +84,13 @@ def get_things_to_delete(study_name, fs_dir, bold_dir):
     """
     # Load the Structural QC
 
-    t1_qc_df = pd.read_csv(fs_dir / f"study-{study_name}_desc-T1_qc.tsv", sep="\t")
+    t1_qc_df = read_qc_tsv(fs_dir / f"study-{study_name}_desc-T1_qc.tsv")
     if study_name in NO_SES_STUDIES:
         t1_qc_df["session_id"] = NO_SES_STUDIES[study_name]
 
     # Load the BOLD QC
-    bold_qc_df = pd.read_csv(
-        bold_dir / "cpac_RBCv0" / f"study-{study_name}_desc-functional_qc.tsv", sep="\t"
+    bold_qc_df = read_qc_csv(
+        bold_dir / "cpac_RBCv0" / f"study-{study_name}_desc-functional_qc.tsv"
     )
 
     # Create a list of files to delete from the different branches
@@ -131,9 +165,7 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         else:
             inner_dir = "cpac_RBCv0"
 
-        participant_dir = (
-            f"sub-{participant_id}" if "-" not in str(participant_id) else participant_id
-        )
+        participant_dir = f"sub-{participant_id}"
 
         if study_name in NO_SES_STUDIES:
             base_dir = data_dir / inner_dir / participant_dir
@@ -151,11 +183,7 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
     def delete_bold_files(row):
         """The subject may have already been deleted via t1 qc,
         so only glob if the directory exists."""
-        participant_bids = (
-            f"sub-{row.participant_id}"
-            if "-" not in str(row.participant_id)
-            else row.participant_id
-        )
+        participant_bids = f"sub-{row.participant_id}"
         session_bids = f"ses-{row.session_id}"
 
         base_dir = data_dir / "cpac_RBCv0" / participant_bids / session_bids
@@ -164,19 +192,13 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
 
         # sub-<label>[_ses-<label>]_task-<label>[_acq-<label>][_ce-<label>][_rec-<label>][_dir-<label>][_run-<index>][_echo-<index>][_part-<mag|phase|real|imag>][_chunk-<index>]_bold.
         search = "*"
-        search_zpad = "*"
         if row.task is not None:
             search += f"task-{row.task}*"
-            search_zpad += f"task-{row.task}*"
         if not (np.isnan(row.acq) or row.acq is None):
             search += f"acq-{row.acq}*"
-            search_zpad += f"acq-{row.acq}*"
         if not (np.isnan(row.run) or row.run is None):
             search += f"run-{row.run}*"
-            search_zpad += f"run-{row.run:02}*"
-        bold_files_to_delete = list(base_dir.rglob(search)) + list(
-            base_dir.rglob(search_zpad)
-        )
+        bold_files_to_delete = list(base_dir.rglob(search))
         if not bold_files_to_delete:
             logging.warning(f"No files found for {row}")
         return list(map(str, bold_files_to_delete))
