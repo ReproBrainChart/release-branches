@@ -214,10 +214,9 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         tagname = f"release-{branchname}"
         if do_commit:
             safe_run(["git", "commit", "-m", f"'{msg}'"])
-        # XXX UNCOMMENT
-        # safe_run(["git", "tag", tagname])
-        # safe_run(["git", "push", "origin", branchname])
-        # safe_run(["git", "push", "origin", tagname])
+        safe_run(["git", "tag", tagname])
+        safe_run(["git", "push", "origin", branchname])
+        safe_run(["git", "push", "origin", tagname])
 
     safe_run(["git", "checkout", "-b", warning_branch])
     commit_and_push(warning_branch, "update warning branch", do_commit=False)
