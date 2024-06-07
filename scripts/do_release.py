@@ -89,7 +89,7 @@ def get_things_to_delete(study_name, fs_dir, bold_dir):
         t1_qc_df["session_id"] = NO_SES_STUDIES[study_name]
 
     # Load the BOLD QC
-    bold_qc_df = read_qc_csv(
+    bold_qc_df = read_qc_tsv(
         bold_dir / "cpac_RBCv0" / f"study-{study_name}_desc-functional_qc.tsv"
     )
 
@@ -170,8 +170,12 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
         if study_name in NO_SES_STUDIES:
             base_dir = data_dir / inner_dir / participant_dir
         else:
-            if not doing_bold:
+            # HBN is an exception: it has multiple sessions values but only 1 per sub
+            # so it ended up being run without multises support
+            if not doing_bold and not study_name == "HBN":
                 base_dir = data_dir / inner_dir / f"{participant_dir}_ses-{session_id}"
+            elif not doing_bold and study_name == "HBN":
+                base_dir = data_dir / inner_dir / participant_dir
             else:
                 base_dir = data_dir / inner_dir / participant_dir / f"ses-{session_id}"
 
@@ -191,12 +195,15 @@ def clean_dataset(study_name, tag, data_dir, t1_artifact, t1_fail, bold_fail=Non
             return
 
         # sub-<label>[_ses-<label>]_task-<label>[_acq-<label>][_ce-<label>][_rec-<label>][_dir-<label>][_run-<index>][_echo-<index>][_part-<mag|phase|real|imag>][_chunk-<index>]_bold.
+        def check_globbable(attr):
+            return isinstance(attr, str) and attr
+
         search = "*"
-        if row.task is not None:
+        if check_globbable(row.task):
             search += f"task-{row.task}*"
-        if not (np.isnan(row.acq) or row.acq is None):
+        if check_globbable(row.acq):
             search += f"acq-{row.acq}*"
-        if not (np.isnan(row.run) or row.run is None):
+        if check_globbable(row.run):
             search += f"run-{row.run}*"
         bold_files_to_delete = list(base_dir.rglob(search))
         if not bold_files_to_delete:
