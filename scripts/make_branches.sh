@@ -1,25 +1,22 @@
 #!/bin/bash
-RELEASE=0.1
-STUDIES="CCNP PNC NKI BHRC HBN"
-WORK_DIR="/cbica/comp_space/RBC/release"
-SCRIPT="$PWD/do_release.py"
 
+SCRIPT="/cbica/projects/RBC/software/release-branches/scripts/do_release.py"
+
+STUDY=$1
+RELEASE=$2
+
+WORK_DIR="${TMP}/rbc-release"
 mkdir -p ${WORK_DIR}
-
 cd ${WORK_DIR}
-for study in ${STUDIES}
-do
-    git clone git@github.com:ReproBrainChart/${study}_FreeSurfer.git
-    git clone git@github.com:ReproBrainChart/${study}_CPAC.git
 
-    python \
-        -m pdb \
-        ${SCRIPT} \
-        ${study} \
-        ${WORK_DIR}/${study}_FreeSurfer \
-        ${WORK_DIR}/${study}_CPAC \
-        ${RELEASE} \
-        --verbose
-#    rm -rf ${study}_FreeSurfer ${study}_CPAC.git
+git clone git@github.com:ReproBrainChart/${STUDY}_FreeSurfer.git
+git clone git@github.com:ReproBrainChart/${STUDY}_CPAC.git
 
-done
+python \
+    -m pdb \
+    ${SCRIPT} \
+    ${STUDY} \
+    ${WORK_DIR}/${STUDY}_FreeSurfer \
+    ${WORK_DIR}/${STUDY}_CPAC \
+    ${RELEASE} \
+    --verbose
