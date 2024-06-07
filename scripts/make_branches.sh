@@ -1,4 +1,8 @@
 #!/bin/bash
+#$ -S /bin/bash
+#$ -l h_vmem=32G
+#$ -l tmpfree=100G
+#$ -l h_rt=48:00:00
 
 SCRIPT="/cbica/projects/RBC/software/release-branches/scripts/do_release.py"
 
@@ -6,17 +10,16 @@ STUDY=$1
 RELEASE=$2
 
 WORK_DIR="${TMP}/rbc-release"
-mkdir -p ${WORK_DIR}
-cd ${WORK_DIR}
+mkdir -p "${WORK_DIR}"
+cd "${WORK_DIR}" || exit 1
 
-git clone git@github.com:ReproBrainChart/${STUDY}_FreeSurfer.git
-git clone git@github.com:ReproBrainChart/${STUDY}_CPAC.git
+git clone "git@github.com:ReproBrainChart/${STUDY}_FreeSurfer.git"
+git clone "git@github.com:ReproBrainChart/${STUDY}_CPAC.git"
 
 python \
-    -m pdb \
     ${SCRIPT} \
-    ${STUDY} \
-    ${WORK_DIR}/${STUDY}_FreeSurfer \
-    ${WORK_DIR}/${STUDY}_CPAC \
-    ${RELEASE} \
+    "${STUDY}" \
+    "${WORK_DIR}/${STUDY}_FreeSurfer" \
+    "${WORK_DIR}/${STUDY}_CPAC" \
+    "${RELEASE}" \
     --verbose
